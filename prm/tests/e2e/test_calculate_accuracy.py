@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions
 # and limitations under the License.
-#  
+#
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -22,6 +22,7 @@ import logging
 from prm.accuracy import (build_prometheus_url, fetch_metrics,
                           calculate_components, calculate_precision_and_recall)
 
+from time import time
 import requests
 
 
@@ -41,7 +42,7 @@ def _get_mesos_running_tasks(mesos_master_host):
 
 def test_integration_accurracy(record_property):
     """ Integration tests to check number of runnings tasks during scenario
-    and calculate and output them to csv file for visulization. """
+    and calculate and output them to csv file for visualization. """
     assert 'MESOS_MASTER_HOST' in os.environ, 'required to get number of running tasks'
     assert 'MESOS_EXPECTED_TASKS' in os.environ, 'required to check number of tasks running'
     assert 'PROMETHEUS' in os.environ, 'prometheus host to connect'
@@ -73,13 +74,20 @@ def test_integration_accurracy(record_property):
     tasks = _get_mesos_running_tasks(mesos_master_host)
     logging.info('tasks = %s', len(tasks))
     assert len(tasks) >= mesos_expected_tasks, \
-        'invalid number of tasks: %r (expected=%r)' % (len(tasks), mesos_expected_tasks)
+        'invalid number of tasks: %r (expected=%r)' % (
+            len(tasks), mesos_expected_tasks)
 
     # Calculate results.
-    prometheus_anomalies_query = build_prometheus_url(prometheus, 'anomaly', tags)
+    prometheus_anomalies_query = build_prometheus_url(prometheus, 'anomaly',
+                                                      tags, 3600, time())
     logging.debug('prometheus query = %r', prometheus_anomalies_query)
+
     anomalies = fetch_metrics(prometheus_anomalies_query)
-    logging.info('found anomalies = %s', len(anomalies['data']['result']))
+    if anomalies['data']['result']:
+        logging.info('found anomalies = %s', len(anomalies['data']['result']))
+    else:
+        logging.info('No anomalies found.')
+        return
 
     true_positives, anomaly_count, slo_violations = calculate_components(
         anomalies, prometheus, tags, window_size)
